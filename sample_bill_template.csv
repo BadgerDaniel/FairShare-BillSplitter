@@ -1,0 +1,6 @@
+Item,amount,Alice,Bob,Charlie,David
+Pizza,20.00,✓,✓,,
+Pasta,15.00,✓,,,
+Salad,10.00,,✓,✓,
+Drinks,5.00,,,✓,
+Dessert,12.00,✓,✓,✓,✓
