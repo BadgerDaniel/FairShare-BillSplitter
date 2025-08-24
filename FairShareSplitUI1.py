@@ -165,7 +165,7 @@ if ui_style == "Classic UI":
         ("Upload Excel file", "Enter manually")
     )
 
-if option == "Upload Excel file":
+    if option == "Upload Excel file":
     # File format selection
     file_format = st.radio(
         "Select file format:",
