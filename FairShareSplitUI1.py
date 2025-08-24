@@ -274,73 +274,73 @@ if ui_style == "Classic UI":
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
         else:
             st.error("Failed to read the file. Please check the format and try again.")
+    
+    elif option == "Enter manually":
+        st.write("Enter the items, prices, and the people who ate each item.")
+        st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
         
-else:
-    st.write("Enter the items, prices, and the people who ate each item.")
-    st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
+        item_count = st.number_input("How many different items?", min_value=1, step=1)
     
-    item_count = st.number_input("How many different items?", min_value=1, step=1)
-    
-    items = []
-    for i in range(item_count):
-        item_name = st.text_input(f"Item {i+1} name")
-        item_price = st.number_input(f"Item {i+1} price", min_value=0.0, format="%.2f")
-        item_people_input = st.text_input(f"People who ate item {i+1} (comma-separated)")
+        items = []
+        for i in range(item_count):
+            item_name = st.text_input(f"Item {i+1} name")
+            item_price = st.number_input(f"Item {i+1} price", min_value=0.0, format="%.2f")
+            item_people_input = st.text_input(f"People who ate item {i+1} (comma-separated)")
+            
+            # Process the comma-separated names
+            if item_people_input:
+                item_people = [name.strip() for name in item_people_input.split(",") if name.strip()]
+            else:
+                item_people = []
+                
+            items.append((item_name, item_price, item_people))
         
-        # Process the comma-separated names
-        if item_people_input:
-            item_people = [name.strip() for name in item_people_input.split(",") if name.strip()]
-        else:
-            item_people = []
-            
-        items.append((item_name, item_price, item_people))
-    
-    tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
-    tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
-    
-    if st.button("Calculate"):
-        if items and any(items):  # Check if items list is not empty
-            detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount)
-            
-            # Display total bill information
-            total_bill = subtotal + tax_amount + tip_amount
-            st.subheader("📊 Bill Summary")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Subtotal", f"${subtotal:.2f}")
-            with col2:
-                st.metric("Tax", f"${tax_amount:.2f}")
-            with col3:
-                st.metric("Tip", f"${tip_amount:.2f}")
-            with col4:
-                st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
-            
-            # Display simple summary first
-            st.subheader("💰 Final Amounts Owed")
-            st.json(simple_result)
-            
-            st.divider()
-            
-            # Display detailed breakdown for each person
-            st.subheader("👥 Individual Breakdowns")
-            for person, details in detailed_result.items():
-                with st.expander(f"📋 {person} - ${details['final_total']:.2f}"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write("**Items Eaten:**")
-                        for item, cost in details['items_eaten']:
-                            st.write(f"• {item}: ${cost:.2f}")
-                        st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
-                    
-                    with col2:
-                        st.write("**Breakdown:**")
-                        st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
-                        st.write(f"• Tax: ${details['tax_amount']:.2f}")
-                        st.write(f"• Tip: ${details['tip_amount']:.2f}")
-                        st.write(f"**Final Total:** ${details['final_total']:.2f}")
-        else:
-            st.error("Please enter at least one item with valid information.")
+        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
+        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
+        
+        if st.button("Calculate"):
+            if items and any(items):  # Check if items list is not empty
+                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount)
+                
+                # Display total bill information
+                total_bill = subtotal + tax_amount + tip_amount
+                st.subheader("📊 Bill Summary")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Subtotal", f"${subtotal:.2f}")
+                with col2:
+                    st.metric("Tax", f"${tax_amount:.2f}")
+                with col3:
+                    st.metric("Tip", f"${tip_amount:.2f}")
+                with col4:
+                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+                
+                # Display simple summary first
+                st.subheader("💰 Final Amounts Owed")
+                st.json(simple_result)
+                
+                st.divider()
+                
+                # Display detailed breakdown for each person
+                st.subheader("👥 Individual Breakdowns")
+                for person, details in detailed_result.items():
+                    with st.expander(f"📋 {person} - ${details['final_total']:.2f}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("**Items Eaten:**")
+                            for item, cost in details['items_eaten']:
+                                st.write(f"• {item}: ${cost:.2f}")
+                            st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
+                        
+                        with col2:
+                            st.write("**Breakdown:**")
+                            st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
+                            st.write(f"• Tax: ${details['tax_amount']:.2f}")
+                            st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write(f"**Final Total:** ${details['final_total']:.2f}")
+            else:
+                st.error("Please enter at least one item with valid information.")
 
 elif ui_style == "Compact UI":
     st.subheader("🚀 Compact Bill Splitter")
