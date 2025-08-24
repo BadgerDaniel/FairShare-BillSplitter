@@ -166,112 +166,112 @@ if ui_style == "Classic UI":
     )
 
     if option == "Upload Excel file":
-    # File format selection
-    file_format = st.radio(
-        "Select file format:",
-        ["Excel (.xlsx)", "CSV (.csv)"],
-        horizontal=True
-    )
-    
-    # File uploader with appropriate type
-    file_type = "csv" if file_format == "CSV (.csv)" else "excel"
-    file_extensions = ["csv"] if file_format == "CSV (.csv)" else ["xlsx", "xls"]
-    
-    uploaded_file = st.file_uploader(
-        f"Choose a {file_format.split(' ')[0]} file", 
-        type=file_extensions
-    )
-    
-    # Show format demonstration table
-    st.subheader("📋 Expected File Format")
-    st.write("Your file should have the following structure:")
-    
-    # Create sample data for demonstration
-    sample_data = {
-        'Item': ['Pizza', 'Pasta', 'Salad', 'Drinks'],
-        'amount': [20.00, 15.00, 10.00, 5.00],
-        'Alice': ['✓', '✓', '', ''],
-        'Bob': ['✓', '', '✓', ''],
-        'Charlie': ['', '', '✓', '✓']
-    }
-    
-    sample_df = pd.DataFrame(sample_data)
-    st.dataframe(sample_df, use_container_width=True)
-    
-    st.write("**Instructions:**")
-    st.write("• **Item**: Name of the food item")
-    st.write("• **amount**: Cost of the item")
-    st.write("• **Person columns**: Put a checkmark (✓) or any text if the person ate that item")
-    st.write("• **Empty cells**: Leave blank if the person didn't eat that item")
-    
-    # Download sample template
-    if st.button("📥 Download Sample Template"):
-        if file_format == "CSV (.csv)":
-            sample_df.to_csv("sample_bill_template.csv", index=False)
-            with open("sample_bill_template.csv", "r") as f:
-                st.download_button(
-                    label="Download CSV Template",
-                    data=f.read(),
-                    file_name="sample_bill_template.csv",
-                    mime="text/csv"
-                )
-        else:
-            sample_df.to_excel("sample_bill_template.xlsx", index=False)
-            with open("sample_bill_template.xlsx", "rb") as f:
-                st.download_button(
-                    label="Download Excel Template",
-                    data=f.read(),
-                    file_name="sample_bill_template.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-    
-    st.divider()
-    
-    tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
-    tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
-    
-    if uploaded_file and tax_amount and tip_amount:
-        detailed_result, simple_result, subtotal = owed_from_xl(uploaded_file, tax_amount, tip_amount, file_type)
+        # File format selection
+        file_format = st.radio(
+            "Select file format:",
+            ["Excel (.xlsx)", "CSV (.csv)"],
+            horizontal=True
+        )
         
-        # Check if file reading was successful
-        if detailed_result is not None:
-            # Display total bill information
-            total_bill = subtotal + tax_amount + tip_amount
-            st.subheader("📊 Bill Summary")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Subtotal", f"${subtotal:.2f}")
-            with col2:
-                st.metric("Tax", f"${tax_amount:.2f}")
-            with col3:
-                st.metric("Tip", f"${tip_amount:.2f}")
-            with col4:
-                st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+        # File uploader with appropriate type
+        file_type = "csv" if file_format == "CSV (.csv)" else "excel"
+        file_extensions = ["csv"] if file_format == "CSV (.csv)" else ["xlsx", "xls"]
+        
+        uploaded_file = st.file_uploader(
+            f"Choose a {file_format.split(' ')[0]} file", 
+            type=file_extensions
+        )
+        
+        # Show format demonstration table
+        st.subheader("📋 Expected File Format")
+        st.write("Your file should have the following structure:")
+        
+        # Create sample data for demonstration
+        sample_data = {
+            'Item': ['Pizza', 'Pasta', 'Salad', 'Drinks'],
+            'amount': [20.00, 15.00, 10.00, 5.00],
+            'Alice': ['✓', '✓', '', ''],
+            'Bob': ['✓', '', '✓', ''],
+            'Charlie': ['', '', '✓', '✓']
+        }
+        
+        sample_df = pd.DataFrame(sample_data)
+        st.dataframe(sample_df, use_container_width=True)
+        
+        st.write("**Instructions:**")
+        st.write("• **Item**: Name of the food item")
+        st.write("• **amount**: Cost of the item")
+        st.write("• **Person columns**: Put a checkmark (✓) or any text if the person ate that item")
+        st.write("• **Empty cells**: Leave blank if the person didn't eat that item")
+        
+        # Download sample template
+        if st.button("📥 Download Sample Template"):
+            if file_format == "CSV (.csv)":
+                sample_df.to_csv("sample_bill_template.csv", index=False)
+                with open("sample_bill_template.csv", "r") as f:
+                    st.download_button(
+                        label="Download CSV Template",
+                        data=f.read(),
+                        file_name="sample_bill_template.csv",
+                        mime="text/csv"
+                    )
+            else:
+                sample_df.to_excel("sample_bill_template.xlsx", index=False)
+                with open("sample_bill_template.xlsx", "rb") as f:
+                    st.download_button(
+                        label="Download Excel Template",
+                        data=f.read(),
+                        file_name="sample_bill_template.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+        
+        st.divider()
+        
+        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
+        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
+        
+        if uploaded_file and tax_amount and tip_amount:
+            detailed_result, simple_result, subtotal = owed_from_xl(uploaded_file, tax_amount, tip_amount, file_type)
             
-            # Display simple summary first
-            st.subheader("💰 Final Amounts Owed")
-            st.json(simple_result)
-            
-            st.divider()
-            
-            # Display detailed breakdown for each person
-            st.subheader("👥 Individual Breakdowns")
-            for person, details in detailed_result.items():
-                with st.expander(f"📋 {person} - ${details['final_total']:.2f}"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write("**Items Eaten:**")
-                        for item, cost in details['items_eaten']:
-                            st.write(f"• {item}: ${cost:.2f}")
-                        st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
-                    
-                    with col2:
-                        st.write("**Breakdown:**")
-                        st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
-                        st.write(f"• Tax: ${details['tax_amount']:.2f}")
-                        st.write(f"• Tip: ${details['tip_amount']:.2f}")
-                        st.write(f"**Final Total:** ${details['final_total']:.2f}")
+            # Check if file reading was successful
+            if detailed_result is not None:
+                # Display total bill information
+                total_bill = subtotal + tax_amount + tip_amount
+                st.subheader("📊 Bill Summary")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Subtotal", f"${subtotal:.2f}")
+                with col2:
+                    st.metric("Tax", f"${tax_amount:.2f}")
+                with col3:
+                    st.metric("Tip", f"${tip_amount:.2f}")
+                with col4:
+                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+                
+                # Display simple summary first
+                st.subheader("💰 Final Amounts Owed")
+                st.json(simple_result)
+                
+                st.divider()
+                
+                # Display detailed breakdown for each person
+                st.subheader("👥 Individual Breakdowns")
+                for person, details in detailed_result.items():
+                    with st.expander(f"📋 {person} - ${details['final_total']:.2f}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("**Items Eaten:**")
+                            for item, cost in details['items_eaten']:
+                                st.write(f"• {item}: ${cost:.2f}")
+                            st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
+                        
+                        with col2:
+                            st.write("**Breakdown:**")
+                            st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
+                            st.write(f"• Tax: ${details['tax_amount']:.2f}")
+                            st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write(f"**Final Total:** ${details['final_total']:.2f}")
         else:
             st.error("Failed to read the file. Please check the format and try again.")
         
