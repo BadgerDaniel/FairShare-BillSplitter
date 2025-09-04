@@ -176,9 +176,10 @@ ui_style = st.radio(
 st.info("💡 **Tip**: Names are automatically trimmed and normalized. 'scott, callie' and 'Scott,Callie' will both become 'Scott' and 'Callie'.")
 
 if ui_style == "Classic UI":
-    option = st.selectbox(
+    option = st.radio(
         "How would you like to input the bill details?",
-        ("Upload Excel file", "Enter manually")
+        ("Upload Excel file", "Enter manually"),
+        horizontal=True
     )
 
     if option == "Upload Excel file":
@@ -298,14 +299,23 @@ if ui_style == "Classic UI":
     elif option == "Enter manually":
         st.write("Enter the items, prices, and the people who ate each item.")
         st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
+        st.write("🍽️ **Multiple Servings**: To indicate someone ate multiple servings, repeat their name (e.g., 'Alice, Alice' for 2 servings).")
         
         item_count = st.number_input("How many different items?", min_value=1, step=1, key="classic_manual_item_count")
     
         items = []
         for i in range(item_count):
-            item_name = st.text_input(f"Item {i+1} name", key=f"classic_manual_item_name_{i}")
-            item_price = st.number_input(f"Item {i+1} price", min_value=0.0, format="%.2f", key=f"classic_manual_item_price_{i}")
-            item_people_input = st.text_input(f"People who ate item {i+1} (comma-separated)", key=f"classic_manual_item_people_{i}")
+            st.subheader(f"Item {i+1}")
+            col1, col2, col3 = st.columns([2, 1, 2])
+            
+            with col1:
+                item_name = st.text_input(f"Item name", key=f"classic_manual_item_name_{i}", placeholder="e.g., Pizza")
+            
+            with col2:
+                item_price = st.number_input(f"Price", min_value=0.0, format="%.2f", key=f"classic_manual_item_price_{i}")
+            
+            with col3:
+                item_people_input = st.text_input(f"People who ate this item (comma-separated)", key=f"classic_manual_item_people_{i}", placeholder="e.g., Alice, Bob or Alice, Alice for 2 servings")
             
             # Process the comma-separated names
             if item_people_input:
@@ -314,10 +324,21 @@ if ui_style == "Classic UI":
                 item_people = []
                 
             items.append((item_name, item_price, item_people))
+            
+            # Add a small divider between items (except for the last one)
+            if i < item_count - 1:
+                st.divider()
         
-        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f", key="classic_manual_tax")
-        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f", key="classic_manual_tip")
-        extra_fees = st.number_input("Enter extra fees/surcharges", min_value=0.0, format="%.2f", key="classic_manual_extra_fees")
+        st.divider()
+        st.subheader("💰 Additional Charges")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            tax_amount = st.number_input("Tax Amount", min_value=0.0, format="%.2f", key="classic_manual_tax")
+        with col2:
+            tip_amount = st.number_input("Tip Amount", min_value=0.0, format="%.2f", key="classic_manual_tip")
+        with col3:
+            extra_fees = st.number_input("Extra Fees/Surcharges", min_value=0.0, format="%.2f", key="classic_manual_extra_fees")
         
         if st.button("Calculate"):
             if items and any(items):  # Check if items list is not empty
@@ -483,14 +504,22 @@ elif ui_style == "Compact UI":
     st.divider()
     st.subheader("✏️ Quick Manual Entry")
 
-    col1, col2 = st.columns(2)
+    st.write("**Add Items One by One:**")
+    st.write("🍽️ **Multiple Servings**: To indicate someone ate multiple servings, repeat their name (e.g., 'Alice, Alice' for 2 servings).")
+    col1, col2, col3, col4 = st.columns([2, 1, 2, 1])
+    
     with col1:
-        item_name_compact = st.text_input("Item Name", key="compact_manual_item_name")
-        item_price_compact = st.number_input("Item Price", min_value=0.0, format="%.2f", key="compact_manual_item_price")
+        item_name_compact = st.text_input("Item Name", key="compact_manual_item_name", placeholder="e.g., Pizza")
     
     with col2:
-        item_people_compact = st.text_input("People (comma-separated)", key="compact_manual_item_people")
-        if st.button("Add Item"):
+        item_price_compact = st.number_input("Price", min_value=0.0, format="%.2f", key="compact_manual_item_price")
+    
+    with col3:
+        item_people_compact = st.text_input("People (comma-separated)", key="compact_manual_item_people", placeholder="e.g., Alice, Bob or Alice, Alice for 2 servings")
+    
+    with col4:
+        st.write("")  # Empty space for alignment
+        if st.button("Add Item", type="primary"):
             if item_name_compact and item_price_compact and item_people_compact:
                 # Process the item
                 people_list = [name.strip() for name in item_people_compact.split(",") if name.strip()]
@@ -503,7 +532,7 @@ elif ui_style == "Compact UI":
                 st.error("Please fill all fields")
 
 # Display running list of items if any
-if st.session_state['compact_items']:
+if 'compact_items' in st.session_state and st.session_state['compact_items']:
     st.subheader("📋 Items Entered (Compact Manual)")
     df_items = pd.DataFrame([
         {"Item": name, "Price": price, "People": ", ".join(people)}
@@ -513,31 +542,34 @@ if st.session_state['compact_items']:
 
 # Calculate Bill button for manual compact items
 if st.button("Calculate Bill (Compact)"):
-    detailed_result_compact_manual, simple_result_compact_manual, subtotal_compact_manual = money_owed(
-        st.session_state['compact_items'], tax_amount_compact, tip_amount_compact, extra_fees_compact
-    )
-    total_bill_compact_manual = subtotal_compact_manual + tax_amount_compact + tip_amount_compact + extra_fees_compact
-    st.subheader("📊 Compact Manual Bill Summary")
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.metric("Subtotal", f"${subtotal_compact_manual:.2f}")
-    with col2:
-        st.metric("Tax", f"${tax_amount_compact:.2f}")
-    with col3:
-        st.metric("Tip", f"${tip_amount_compact:.2f}")
-    with col4:
-        st.metric("Extra Fees", f"${extra_fees_compact:.2f}")
-    with col5:
-        st.metric("Total", f"${total_bill_compact_manual:.2f}")
-    st.subheader("💰 Final Amounts (Compact Manual)")
-    st.json(simple_result_compact_manual)
-    st.subheader("👥 Individual Breakdowns (Compact Manual)")
-    for person, details in detailed_result_compact_manual.items():
-        with st.expander(f"{person} - ${details['final_total']:.2f}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**Items:** {len(details['items_eaten'])}")
-                st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
-            with col2:
-                st.write(f"**Bill %:** {details['percentage_of_bill']:.1f}%")
-                st.write(f"**Total:** ${details['final_total']:.2f}")
+    if 'compact_items' in st.session_state and st.session_state['compact_items']:
+        detailed_result_compact_manual, simple_result_compact_manual, subtotal_compact_manual = money_owed(
+            st.session_state['compact_items'], tax_amount_compact, tip_amount_compact, extra_fees_compact
+        )
+        total_bill_compact_manual = subtotal_compact_manual + tax_amount_compact + tip_amount_compact + extra_fees_compact
+        st.subheader("📊 Compact Manual Bill Summary")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("Subtotal", f"${subtotal_compact_manual:.2f}")
+        with col2:
+            st.metric("Tax", f"${tax_amount_compact:.2f}")
+        with col3:
+            st.metric("Tip", f"${tip_amount_compact:.2f}")
+        with col4:
+            st.metric("Extra Fees", f"${extra_fees_compact:.2f}")
+        with col5:
+            st.metric("Total", f"${total_bill_compact_manual:.2f}")
+        st.subheader("💰 Final Amounts (Compact Manual)")
+        st.json(simple_result_compact_manual)
+        st.subheader("👥 Individual Breakdowns (Compact Manual)")
+        for person, details in detailed_result_compact_manual.items():
+            with st.expander(f"{person} - ${details['final_total']:.2f}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Items:** {len(details['items_eaten'])}")
+                    st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
+                with col2:
+                    st.write(f"**Bill %:** {details['percentage_of_bill']:.1f}%")
+                    st.write(f"**Total:** ${details['final_total']:.2f}")
+    else:
+        st.error("Please add some items before calculating the bill.")
