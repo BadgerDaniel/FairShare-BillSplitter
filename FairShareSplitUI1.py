@@ -50,7 +50,7 @@ def normalize_names_list(names):
     
     return normalized
 
-def money_owed(items, tax_amount, tip_amount):
+def money_owed(items, tax_amount, tip_amount, extra_fees=0.0):
     person_list = []
 
     for item, cost, names in items:
@@ -91,7 +91,7 @@ def money_owed(items, tax_amount, tip_amount):
             person_items[name].append((item, split_cost_of_item))
             person_individual_costs[name] += split_cost_of_item
 
-    total_tax_tip = tax_amount + tip_amount
+    total_tax_tip_fees = tax_amount + tip_amount + extra_fees
 
     for person in person_dict_percent_of_bill.keys():
         person_dict_percent_of_bill[person] = person_dict[person] / running_total_preTaxTip
@@ -99,8 +99,9 @@ def money_owed(items, tax_amount, tip_amount):
     for person in person_dict:
         person_tip_to_pay = person_dict_percent_of_bill[person] * tip_amount
         person_tax_to_pay = person_dict_percent_of_bill[person] * tax_amount
-        person_tax_tip_to_pay = person_tax_to_pay + person_tip_to_pay
-        person_final_total = person_tax_tip_to_pay + person_dict[person]
+        person_extra_fees_to_pay = person_dict_percent_of_bill[person] * extra_fees
+        person_tax_tip_fees_to_pay = person_tax_to_pay + person_tip_to_pay + person_extra_fees_to_pay
+        person_final_total = person_tax_tip_fees_to_pay + person_dict[person]
         person_dict_final[person] = round(person_final_total, 2)
 
     # New: Return detailed breakdown
@@ -110,12 +111,15 @@ def money_owed(items, tax_amount, tip_amount):
         person_tax = person_dict_percent_of_bill[person] * tax_amount
         person_tip = person_dict_percent_of_bill[person] * tip_amount
         
+        person_extra_fees = person_dict_percent_of_bill[person] * extra_fees
+        
         detailed_results[person] = {
             'items_eaten': person_items[person],
             'subtotal_before_tax_tip': round(person_individual_costs[person], 2),
             'percentage_of_bill': round(person_percentage * 100, 2),
             'tax_amount': round(person_tax, 2),
             'tip_amount': round(person_tip, 2),
+            'extra_fees_amount': round(person_extra_fees, 2),
             'final_total': round(person_dict_final[person], 2)
         }
 
@@ -127,7 +131,7 @@ def calculate_total_bill(items, tax_amount, tip_amount):
     total = subtotal + tax_amount + tip_amount
     return subtotal, total
 
-def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel"):
+def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel", extra_fees=0.0):
     """Read bill data from Excel or CSV file"""
     try:
         if file_type == "csv":
@@ -139,10 +143,21 @@ def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel"):
         for index, row in df.iterrows():
             item_name = row['Item']
             item_cost = row['amount']
-            consumers = [row[col] for col in df.columns[2:] if not pd.isnull(row[col])]
+            # Determine number of servings per person column
+            consumers = []
+            for col in df.columns[2:]:
+                val = row[col]
+                if pd.isnull(val):
+                    continue
+                try:
+                    count = int(val)
+                except:
+                    # non-numeric (e.g., ✓), treat as one serving
+                    count = 1
+                consumers.extend([col] * count)
             items.append((item_name, item_cost, consumers))
 
-        return money_owed(items, tax_amount, tip_amount)
+        return money_owed(items, tax_amount, tip_amount, extra_fees)
     except Exception as e:
         st.error(f"Error reading file: {str(e)}")
         return None, None, None
@@ -150,10 +165,11 @@ def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel"):
 st.title("Fair Share Bill Splitter")
 
 # UI Style Selector
-ui_style = st.selectbox(
+ui_style = st.radio(
     "Choose UI Style:",
     ["Classic UI", "Compact UI"],
-    help="Classic UI: Full-featured with detailed breakdowns. Compact UI: Streamlined and easier to navigate."
+    help="Classic UI: Full-featured with detailed breakdowns. Compact UI: Streamlined and easier to navigate.",
+    horizontal=True
 )
 
 # Add info about name normalization
@@ -201,7 +217,7 @@ if ui_style == "Classic UI":
         st.write("**Instructions:**")
         st.write("• **Item**: Name of the food item")
         st.write("• **amount**: Cost of the item")
-        st.write("• **Person columns**: Put a checkmark (✓) or any text if the person ate that item")
+        st.write("• **Person columns**: Enter the number of servings eaten (e.g., 2 for two servings). Non-numeric entries count as one serving.")
         st.write("• **Empty cells**: Leave blank if the person didn't eat that item")
         
         # Download sample template
@@ -227,18 +243,19 @@ if ui_style == "Classic UI":
         
         st.divider()
         
-        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
-        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
+        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f", key="classic_excel_tax")
+        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f", key="classic_excel_tip")
+        extra_fees = st.number_input("Enter extra fees/surcharges", min_value=0.0, format="%.2f", key="classic_excel_extra_fees")
         
         if uploaded_file and tax_amount and tip_amount:
-            detailed_result, simple_result, subtotal = owed_from_xl(uploaded_file, tax_amount, tip_amount, file_type)
+            detailed_result, simple_result, subtotal = owed_from_xl(uploaded_file, tax_amount, tip_amount, file_type, extra_fees)
             
             # Check if file reading was successful
             if detailed_result is not None:
                 # Display total bill information
-                total_bill = subtotal + tax_amount + tip_amount
+                total_bill = subtotal + tax_amount + tip_amount + extra_fees
                 st.subheader("📊 Bill Summary")
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
                     st.metric("Subtotal", f"${subtotal:.2f}")
                 with col2:
@@ -246,7 +263,9 @@ if ui_style == "Classic UI":
                 with col3:
                     st.metric("Tip", f"${tip_amount:.2f}")
                 with col4:
-                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+                    st.metric("Extra Fees", f"${extra_fees:.2f}")
+                with col5:
+                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount + extra_fees:.2f}")
                 
                 # Display simple summary first
                 st.subheader("💰 Final Amounts Owed")
@@ -271,6 +290,7 @@ if ui_style == "Classic UI":
                             st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
                             st.write(f"• Tax: ${details['tax_amount']:.2f}")
                             st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write(f"• Extra Fees: ${details['extra_fees_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
         else:
             st.error("Failed to read the file. Please check the format and try again.")
@@ -279,13 +299,13 @@ if ui_style == "Classic UI":
         st.write("Enter the items, prices, and the people who ate each item.")
         st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
         
-        item_count = st.number_input("How many different items?", min_value=1, step=1)
+        item_count = st.number_input("How many different items?", min_value=1, step=1, key="classic_manual_item_count")
     
         items = []
         for i in range(item_count):
-            item_name = st.text_input(f"Item {i+1} name")
-            item_price = st.number_input(f"Item {i+1} price", min_value=0.0, format="%.2f")
-            item_people_input = st.text_input(f"People who ate item {i+1} (comma-separated)")
+            item_name = st.text_input(f"Item {i+1} name", key=f"classic_manual_item_name_{i}")
+            item_price = st.number_input(f"Item {i+1} price", min_value=0.0, format="%.2f", key=f"classic_manual_item_price_{i}")
+            item_people_input = st.text_input(f"People who ate item {i+1} (comma-separated)", key=f"classic_manual_item_people_{i}")
             
             # Process the comma-separated names
             if item_people_input:
@@ -295,17 +315,18 @@ if ui_style == "Classic UI":
                 
             items.append((item_name, item_price, item_people))
         
-        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f")
-        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f")
+        tax_amount = st.number_input("Enter tax amount", min_value=0.0, format="%.2f", key="classic_manual_tax")
+        tip_amount = st.number_input("Enter tip amount", min_value=0.0, format="%.2f", key="classic_manual_tip")
+        extra_fees = st.number_input("Enter extra fees/surcharges", min_value=0.0, format="%.2f", key="classic_manual_extra_fees")
         
         if st.button("Calculate"):
             if items and any(items):  # Check if items list is not empty
-                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount)
+                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount, extra_fees)
                 
                 # Display total bill information
-                total_bill = subtotal + tax_amount + tip_amount
+                total_bill = subtotal + tax_amount + tip_amount + extra_fees
                 st.subheader("📊 Bill Summary")
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
                     st.metric("Subtotal", f"${subtotal:.2f}")
                 with col2:
@@ -313,7 +334,9 @@ if ui_style == "Classic UI":
                 with col3:
                     st.metric("Tip", f"${tip_amount:.2f}")
                 with col4:
-                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+                    st.metric("Extra Fees", f"${extra_fees:.2f}")
+                with col5:
+                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount + extra_fees:.2f}")
                 
                 # Display simple summary first
                 st.subheader("💰 Final Amounts Owed")
@@ -338,6 +361,7 @@ if ui_style == "Classic UI":
                             st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
                             st.write(f"• Tax: ${details['tax_amount']:.2f}")
                             st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write(f"• Extra Fees: ${details['extra_fees_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
             else:
                 st.error("Please enter at least one item with valid information.")
@@ -402,24 +426,26 @@ elif ui_style == "Compact UI":
     col1, col2 = st.columns(2)
     
     with col1:
-        tax_amount_compact = st.number_input("Tax Amount", min_value=0.0, format="%.2f")
+        tax_amount_compact = st.number_input("Tax Amount", min_value=0.0, format="%.2f", key="compact_tax")
     
     with col2:
-        tip_amount_compact = st.number_input("Tip Amount", min_value=0.0, format="%.2f")
+        tip_amount_compact = st.number_input("Tip Amount", min_value=0.0, format="%.2f", key="compact_tip")
+    
+    extra_fees_compact = st.number_input("Extra Fees/Surcharges", min_value=0.0, format="%.2f", key="compact_extra_fees")
     
     # Process file or show manual entry
     if uploaded_file_compact and tax_amount_compact and tip_amount_compact:
         detailed_result_compact, simple_result_compact, subtotal_compact = owed_from_xl(
-            uploaded_file_compact, tax_amount_compact, tip_amount_compact, file_type_compact
+            uploaded_file_compact, tax_amount_compact, tip_amount_compact, file_type_compact, extra_fees_compact
         )
         
         if detailed_result_compact is not None:
             # Compact results display
-            total_bill_compact = subtotal_compact + tax_amount_compact + tip_amount_compact
+            total_bill_compact = subtotal_compact + tax_amount_compact + tip_amount_compact + extra_fees_compact
             
             # Bill summary in compact cards
             st.subheader("📊 Bill Summary")
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 st.metric("Subtotal", f"${subtotal_compact:.2f}")
             with col2:
@@ -427,6 +453,8 @@ elif ui_style == "Compact UI":
             with col3:
                 st.metric("Tip", f"${tip_amount_compact:.2f}")
             with col4:
+                st.metric("Extra Fees", f"${extra_fees_compact:.2f}")
+            with col5:
                 st.metric("Total", f"${total_bill_compact:.2f}")
             
             # Final amounts owed (compact)
@@ -448,23 +476,68 @@ elif ui_style == "Compact UI":
             st.error("Failed to read file. Check format and try again.")
     
     # Compact manual entry
+    # Initialize manual compact items list
+    if 'compact_items' not in st.session_state:
+        st.session_state['compact_items'] = []
+
     st.divider()
     st.subheader("✏️ Quick Manual Entry")
-    
+
     col1, col2 = st.columns(2)
     with col1:
-        item_name_compact = st.text_input("Item Name")
-        item_price_compact = st.number_input("Item Price", min_value=0.0, format="%.2f")
+        item_name_compact = st.text_input("Item Name", key="compact_manual_item_name")
+        item_price_compact = st.number_input("Item Price", min_value=0.0, format="%.2f", key="compact_manual_item_price")
     
     with col2:
-        item_people_compact = st.text_input("People (comma-separated)")
+        item_people_compact = st.text_input("People (comma-separated)", key="compact_manual_item_people")
         if st.button("Add Item"):
             if item_name_compact and item_price_compact and item_people_compact:
                 # Process the item
                 people_list = [name.strip() for name in item_people_compact.split(",") if name.strip()]
                 if people_list:
+                    st.session_state['compact_items'].append((item_name_compact, item_price_compact, people_list))
                     st.success(f"Added: {item_name_compact} - ${item_price_compact:.2f} for {', '.join(people_list)}")
                 else:
                     st.error("Please enter valid names")
             else:
                 st.error("Please fill all fields")
+
+# Display running list of items if any
+if st.session_state['compact_items']:
+    st.subheader("📋 Items Entered (Compact Manual)")
+    df_items = pd.DataFrame([
+        {"Item": name, "Price": price, "People": ", ".join(people)}
+        for name, price, people in st.session_state['compact_items']
+    ])
+    st.dataframe(df_items, use_container_width=True)
+
+# Calculate Bill button for manual compact items
+if st.button("Calculate Bill (Compact)"):
+    detailed_result_compact_manual, simple_result_compact_manual, subtotal_compact_manual = money_owed(
+        st.session_state['compact_items'], tax_amount_compact, tip_amount_compact, extra_fees_compact
+    )
+    total_bill_compact_manual = subtotal_compact_manual + tax_amount_compact + tip_amount_compact + extra_fees_compact
+    st.subheader("📊 Compact Manual Bill Summary")
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("Subtotal", f"${subtotal_compact_manual:.2f}")
+    with col2:
+        st.metric("Tax", f"${tax_amount_compact:.2f}")
+    with col3:
+        st.metric("Tip", f"${tip_amount_compact:.2f}")
+    with col4:
+        st.metric("Extra Fees", f"${extra_fees_compact:.2f}")
+    with col5:
+        st.metric("Total", f"${total_bill_compact_manual:.2f}")
+    st.subheader("💰 Final Amounts (Compact Manual)")
+    st.json(simple_result_compact_manual)
+    st.subheader("👥 Individual Breakdowns (Compact Manual)")
+    for person, details in detailed_result_compact_manual.items():
+        with st.expander(f"{person} - ${details['final_total']:.2f}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Items:** {len(details['items_eaten'])}")
+                st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
+            with col2:
+                st.write(f"**Bill %:** {details['percentage_of_bill']:.1f}%")
+                st.write(f"**Total:** ${details['final_total']:.2f}")
