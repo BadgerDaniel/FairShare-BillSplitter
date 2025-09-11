@@ -1,6 +1,12 @@
 import streamlit as st
 import pandas as pd
 import copy
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
 
 def normalize_name(name):
     """
@@ -162,6 +168,124 @@ def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel", extra_fees
         st.error(f"Error reading file: {str(e)}")
         return None, None, None
 
+def generate_text_export(simple_breakdown, detailed_breakdowns, totals):
+    """Generate a text export of the bill breakdown"""
+    text_content = []
+    text_content.append("=" * 60)
+    text_content.append("FAIR SHARE BILL SPLITTER - BREAKDOWN")
+    text_content.append("=" * 60)
+    text_content.append("")
+    
+    # Simple breakdown
+    text_content.append("SIMPLE BREAKDOWN:")
+    text_content.append("-" * 30)
+    for person, amount in simple_breakdown.items():
+        text_content.append(f"{person}: ${amount:.2f}")
+    text_content.append("")
+    
+    # Totals
+    text_content.append("TOTALS:")
+    text_content.append("-" * 30)
+    text_content.append(f"Subtotal: ${totals['subtotal']:.2f}")
+    text_content.append(f"Tax: ${totals['tax']:.2f}")
+    text_content.append(f"Tip: ${totals['tip']:.2f}")
+    text_content.append(f"Extra Fees: ${totals['extra_fees']:.2f}")
+    text_content.append(f"TOTAL: ${totals['total']:.2f}")
+    text_content.append("")
+    
+    # Detailed breakdowns
+    text_content.append("DETAILED BREAKDOWN:")
+    text_content.append("-" * 30)
+    for person, details in detailed_breakdowns.items():
+        text_content.append(f"\n{person.upper()}:")
+        text_content.append(f"  Items: {', '.join(details['items'])}")
+        text_content.append(f"  Item Total: ${details['item_total']:.2f}")
+        text_content.append(f"  Bill %: {details['percentage_of_bill']:.1f}%")
+        text_content.append(f"  Tax: ${details['tax_amount']:.2f}")
+        text_content.append(f"  Tip: ${details['tip_amount']:.2f}")
+        text_content.append(f"  Extra Fees: ${details['extra_fees_amount']:.2f}")
+        text_content.append(f"  FINAL TOTAL: ${details['final_total']:.2f}")
+    
+    return "\n".join(text_content)
+
+def generate_pdf_export(simple_breakdown, detailed_breakdowns, totals):
+    """Generate a PDF export of the bill breakdown"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30,
+        alignment=1  # Center alignment
+    )
+    story.append(Paragraph("FAIR SHARE BILL SPLITTER", title_style))
+    story.append(Paragraph("Bill Breakdown Report", styles['Heading2']))
+    story.append(Spacer(1, 20))
+    
+    # Simple breakdown table
+    story.append(Paragraph("Simple Breakdown", styles['Heading3']))
+    simple_data = [["Person", "Amount Owed"]]
+    for person, amount in simple_breakdown.items():
+        simple_data.append([person, f"${amount:.2f}"])
+    
+    simple_table = Table(simple_data)
+    simple_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(simple_table)
+    story.append(Spacer(1, 20))
+    
+    # Totals
+    story.append(Paragraph("Totals", styles['Heading3']))
+    totals_data = [
+        ["Subtotal", f"${totals['subtotal']:.2f}"],
+        ["Tax", f"${totals['tax']:.2f}"],
+        ["Tip", f"${totals['tip']:.2f}"],
+        ["Extra Fees", f"${totals['extra_fees']:.2f}"],
+        ["TOTAL", f"${totals['total']:.2f}"]
+    ]
+    
+    totals_table = Table(totals_data)
+    totals_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 4), (-1, 4), colors.darkblue),
+        ('TEXTCOLOR', (0, 4), (-1, 4), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 4), (-1, 4), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 4), (-1, 4), 14),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(totals_table)
+    story.append(Spacer(1, 20))
+    
+    # Detailed breakdowns
+    story.append(Paragraph("Detailed Breakdown", styles['Heading3']))
+    for person, details in detailed_breakdowns.items():
+        story.append(Paragraph(f"<b>{person}</b>", styles['Heading4']))
+        story.append(Paragraph(f"Items: {', '.join(details['items'])}", styles['Normal']))
+        story.append(Paragraph(f"Item Total: ${details['item_total']:.2f}", styles['Normal']))
+        story.append(Paragraph(f"Bill %: {details['percentage_of_bill']:.1f}%", styles['Normal']))
+        story.append(Paragraph(f"Tax: ${details['tax_amount']:.2f}", styles['Normal']))
+        story.append(Paragraph(f"Tip: ${details['tip_amount']:.2f}", styles['Normal']))
+        story.append(Paragraph(f"Extra Fees: ${details['extra_fees_amount']:.2f}", styles['Normal']))
+        story.append(Paragraph(f"<b>Final Total: ${details['final_total']:.2f}</b>", styles['Normal']))
+        story.append(Spacer(1, 10))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 st.title("Fair Share Bill Splitter")
 
 # UI Style Selector
@@ -178,7 +302,7 @@ st.info("💡 **Tip**: Names are automatically trimmed and normalized. 'scott, c
 if ui_style == "Classic UI":
     option = st.radio(
         "How would you like to input the bill details?",
-        ("Upload Excel file", "Enter manually"),
+        ("Enter manually", "Upload Excel file"),
         horizontal=True
     )
 
@@ -293,6 +417,40 @@ if ui_style == "Classic UI":
                             st.write(f"• Tip: ${details['tip_amount']:.2f}")
                             st.write(f"• Extra Fees: ${details['extra_fees_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
+                
+                # Export buttons for Excel results
+                st.divider()
+                st.subheader("📤 Export Results")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Prepare totals for export
+                    totals_excel = {
+                        'subtotal': subtotal,
+                        'tax': tax_amount,
+                        'tip': tip_amount,
+                        'extra_fees': extra_fees,
+                        'total': total_bill
+                    }
+                    
+                    # Generate text export
+                    text_content_excel = generate_text_export(simple_result, detailed_result, totals_excel)
+                    st.download_button(
+                        label="📄 Download Text Report",
+                        data=text_content_excel,
+                        file_name="bill_breakdown_excel.txt",
+                        mime="text/plain"
+                    )
+                
+                with col2:
+                    # Generate PDF export
+                    pdf_content_excel = generate_pdf_export(simple_result, detailed_result, totals_excel)
+                    st.download_button(
+                        label="📋 Download PDF Report",
+                        data=pdf_content_excel,
+                        file_name="bill_breakdown_excel.pdf",
+                        mime="application/pdf"
+                    )
         else:
             st.error("Failed to read the file. Please check the format and try again.")
     
@@ -384,6 +542,40 @@ if ui_style == "Classic UI":
                             st.write(f"• Tip: ${details['tip_amount']:.2f}")
                             st.write(f"• Extra Fees: ${details['extra_fees_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
+                
+                # Export buttons
+                st.divider()
+                st.subheader("📤 Export Results")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Prepare totals for export
+                    totals = {
+                        'subtotal': subtotal,
+                        'tax': tax_amount,
+                        'tip': tip_amount,
+                        'extra_fees': extra_fees,
+                        'total': total_bill
+                    }
+                    
+                    # Generate text export
+                    text_content = generate_text_export(simple_result, detailed_result, totals)
+                    st.download_button(
+                        label="📄 Download Text Report",
+                        data=text_content,
+                        file_name="bill_breakdown.txt",
+                        mime="text/plain"
+                    )
+                
+                with col2:
+                    # Generate PDF export
+                    pdf_content = generate_pdf_export(simple_result, detailed_result, totals)
+                    st.download_button(
+                        label="📋 Download PDF Report",
+                        data=pdf_content,
+                        file_name="bill_breakdown.pdf",
+                        mime="application/pdf"
+                    )
             else:
                 st.error("Please enter at least one item with valid information.")
 
@@ -571,5 +763,39 @@ if st.button("Calculate Bill (Compact)"):
                 with col2:
                     st.write(f"**Bill %:** {details['percentage_of_bill']:.1f}%")
                     st.write(f"**Total:** ${details['final_total']:.2f}")
+        
+        # Export buttons for Compact UI
+        st.divider()
+        st.subheader("📤 Export Results")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Prepare totals for export
+            totals_compact = {
+                'subtotal': subtotal_compact_manual,
+                'tax': tax_amount_compact,
+                'tip': tip_amount_compact,
+                'extra_fees': extra_fees_compact,
+                'total': total_bill_compact_manual
+            }
+            
+            # Generate text export
+            text_content_compact = generate_text_export(simple_result_compact_manual, detailed_result_compact_manual, totals_compact)
+            st.download_button(
+                label="📄 Download Text Report",
+                data=text_content_compact,
+                file_name="bill_breakdown_compact.txt",
+                mime="text/plain"
+            )
+        
+        with col2:
+            # Generate PDF export
+            pdf_content_compact = generate_pdf_export(simple_result_compact_manual, detailed_result_compact_manual, totals_compact)
+            st.download_button(
+                label="📋 Download PDF Report",
+                data=pdf_content_compact,
+                file_name="bill_breakdown_compact.pdf",
+                mime="application/pdf"
+            )
     else:
         st.error("Please add some items before calculating the bill.")
