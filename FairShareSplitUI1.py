@@ -198,8 +198,10 @@ def generate_text_export(simple_breakdown, detailed_breakdowns, totals):
     text_content.append("-" * 30)
     for person, details in detailed_breakdowns.items():
         text_content.append(f"\n{person.upper()}:")
-        text_content.append(f"  Items: {', '.join(details['items'])}")
-        text_content.append(f"  Item Total: ${details['item_total']:.2f}")
+        # Extract item names from the items_eaten list of tuples
+        item_names = [item[0] for item in details['items_eaten']]
+        text_content.append(f"  Items: {', '.join(item_names)}")
+        text_content.append(f"  Item Total: ${details['subtotal_before_tax_tip']:.2f}")
         text_content.append(f"  Bill %: {details['percentage_of_bill']:.1f}%")
         text_content.append(f"  Tax: ${details['tax_amount']:.2f}")
         text_content.append(f"  Tip: ${details['tip_amount']:.2f}")
