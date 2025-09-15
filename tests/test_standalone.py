@@ -3,6 +3,9 @@
 Test script for the standalone enhanced FairShare Bill Splitter functions
 """
 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 from enhanced_functions import print_detailed_breakdown
 
 def main():

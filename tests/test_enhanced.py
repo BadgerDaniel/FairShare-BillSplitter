@@ -6,11 +6,12 @@ Test script for the enhanced FairShare Bill Splitter functionality
 import sys
 import os
 
-# Add the current directory to Python path so we can import our functions
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory and scripts directory to Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-# Import the enhanced function from the Streamlit app
-from FairShareSplitUI1 import money_owed_enhanced, calculate_total_bill
+# Import the enhanced function from the scripts folder
+from enhanced_functions import money_owed_enhanced, calculate_total_bill
 
 def test_enhanced_functionality():
     """Test the enhanced bill splitting functionality"""
