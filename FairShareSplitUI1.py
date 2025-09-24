@@ -275,8 +275,10 @@ def generate_pdf_export(simple_breakdown, detailed_breakdowns, totals):
     story.append(Paragraph("Detailed Breakdown", styles['Heading3']))
     for person, details in detailed_breakdowns.items():
         story.append(Paragraph(f"<b>{person}</b>", styles['Heading4']))
-        story.append(Paragraph(f"Items: {', '.join(details['items'])}", styles['Normal']))
-        story.append(Paragraph(f"Item Total: ${details['item_total']:.2f}", styles['Normal']))
+        # Extract item names from the items_eaten list of tuples
+        item_names = [item[0] for item in details['items_eaten']]
+        story.append(Paragraph(f"Items: {', '.join(item_names)}", styles['Normal']))
+        story.append(Paragraph(f"Item Total: ${details['subtotal_before_tax_tip']:.2f}", styles['Normal']))
         story.append(Paragraph(f"Bill %: {details['percentage_of_bill']:.1f}%", styles['Normal']))
         story.append(Paragraph(f"Tax: ${details['tax_amount']:.2f}", styles['Normal']))
         story.append(Paragraph(f"Tip: ${details['tip_amount']:.2f}", styles['Normal']))
