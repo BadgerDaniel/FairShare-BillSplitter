@@ -6,6 +6,25 @@ def normalize_name(name):
     """Normalize a single name by trimming and title-casing"""
     return name.strip().title()
 
+def format_item_display(item_name, cost, num_people_shared):
+    """
+    Format item display to show fractional portions when shared
+    
+    Args:
+        item_name: Name of the item
+        cost: Individual cost for this person
+        num_people_shared: Number of people who shared this item
+    
+    Returns:
+        Formatted string showing the item with fractional portion
+    """
+    if num_people_shared == 1:
+        return f"{item_name}: ${cost:.2f}"
+    else:
+        # Create fraction string
+        fraction_str = f"{1}/{num_people_shared}"
+        return f"{fraction_str} of {item_name}: ${cost:.2f}"
+
 def normalize_names_list(names_list):
     """Normalize a list of names, handling comma-separated strings"""
     normalized_names = []
@@ -29,7 +48,7 @@ def normalize_names_list(names_list):
     
     return unique_names
 
-def money_owed(items, tax_amount, tip_amount):
+def money_owed(items, tax_amount, tip_amount, discount_amount=0.0):
     """Calculate how much each person owes with detailed breakdown"""
     if not items:
         return {}, {}, 0
@@ -64,8 +83,8 @@ def money_owed(items, tax_amount, tip_amount):
 
         for name in normalized_names:
             person_dict[name] += split_cost_of_item
-            # Track what each person ate and their individual costs
-            person_items[name].append((item, split_cost_of_item))
+            # Track what each person ate and their individual costs, including how many people shared the item
+            person_items[name].append((item, split_cost_of_item, len(normalized_names)))
             person_individual_costs[name] += split_cost_of_item
 
     total_tax_tip = tax_amount + tip_amount
@@ -76,8 +95,9 @@ def money_owed(items, tax_amount, tip_amount):
     for person in person_dict:
         person_tip_to_pay = person_dict_percent_of_bill[person] * tip_amount
         person_tax_to_pay = person_dict_percent_of_bill[person] * tax_amount
+        person_discount_to_apply = person_dict_percent_of_bill[person] * discount_amount
         person_tax_tip_to_pay = person_tax_to_pay + person_tip_to_pay
-        person_final_total = person_tax_tip_to_pay + person_dict[person]
+        person_final_total = person_tax_tip_to_pay + person_dict[person] - person_discount_to_apply
         person_dict_final[person] = round(person_final_total, 2)
 
     # New: Return detailed breakdown
@@ -86,6 +106,7 @@ def money_owed(items, tax_amount, tip_amount):
         person_percentage = person_dict_percent_of_bill[person]
         person_tax = person_dict_percent_of_bill[person] * tax_amount
         person_tip = person_dict_percent_of_bill[person] * tip_amount
+        person_discount = person_dict_percent_of_bill[person] * discount_amount
         
         detailed_results[person] = {
             'items_eaten': person_items[person],
@@ -93,15 +114,16 @@ def money_owed(items, tax_amount, tip_amount):
             'percentage_of_bill': round(person_percentage * 100, 2),
             'tax_amount': round(person_tax, 2),
             'tip_amount': round(person_tip, 2),
+            'discount_amount': round(person_discount, 2),
             'final_total': round(person_dict_final[person], 2)
         }
 
     return detailed_results, person_dict_final, running_total_preTaxTip
 
-def calculate_total_bill(items, tax_amount, tip_amount):
-    """Calculate the total bill amount including tax and tip"""
+def calculate_total_bill(items, tax_amount, tip_amount, discount_amount=0.0):
+    """Calculate the total bill amount including tax, tip, and discount"""
     subtotal = sum(cost for _, cost, _ in items)
-    total = subtotal + tax_amount + tip_amount
+    total = subtotal + tax_amount + tip_amount - discount_amount
     return subtotal, total
 
 def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel"):
@@ -119,7 +141,7 @@ def owed_from_xl(filepath, tax_amount, tip_amount, file_type="excel"):
             consumers = [row[col] for col in df.columns[2:] if not pd.isnull(row[col])]
             items.append((item_name, item_cost, consumers))
 
-        return money_owed(items, tax_amount, tip_amount)
+        return money_owed(items, tax_amount, tip_amount, discount_amount_compact)
     except Exception as e:
         st.error(f"Error reading file: {str(e)}")
         return None, None, None
@@ -240,15 +262,24 @@ if ui_style == "Classic UI":
                         
                         with col1:
                             st.write("**Items Eaten:**")
-                            for item, cost in details['items_eaten']:
-                                st.write(f"• {item}: ${cost:.2f}")
+                            for item_data in details['items_eaten']:
+                                if len(item_data) == 3:  # New format with num_people_shared
+                                    item, cost, num_people_shared = item_data
+                                    formatted_item = format_item_display(item, cost, num_people_shared)
+                                else:  # Old format for backward compatibility
+                                    item, cost = item_data
+                                    formatted_item = f"{item}: ${cost:.2f}"
+                                st.write(f"• {formatted_item}")
                             st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
                         
                         with col2:
-                            st.write("**Breakdown:**")
-                            st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
-                            st.write(f"• Tax: ${details['tax_amount']:.2f}")
-                            st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write("**Cost Breakdown:**")
+                            st.write(f"• Items Subtotal: ${details['subtotal_before_tax_tip']:.2f}")
+                            st.write(f"• Bill Percentage: {details['percentage_of_bill']:.1f}%")
+                            st.write(f"• Tax ({details['percentage_of_bill']:.1f}%): ${details['tax_amount']:.2f}")
+                            st.write(f"• Tip ({details['percentage_of_bill']:.1f}%): ${details['tip_amount']:.2f}")
+                            if details.get('discount_amount', 0) > 0:
+                                st.write(f"• Discount ({details['percentage_of_bill']:.1f}%): -${details['discount_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
             else:
                 st.error("Failed to read the file. Please check the format and try again.")
@@ -278,12 +309,12 @@ if ui_style == "Classic UI":
         
         if st.button("Calculate"):
             if items and any(items):  # Check if items list is not empty
-                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount)
+                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount, discount_amount_compact)
                 
                 # Display total bill information
-                total_bill = subtotal + tax_amount + tip_amount
+                total_bill = subtotal + tax_amount + tip_amount - discount_amount_compact
                 st.subheader("📊 Bill Summary")
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
                     st.metric("Subtotal", f"${subtotal:.2f}")
                 with col2:
@@ -291,7 +322,9 @@ if ui_style == "Classic UI":
                 with col3:
                     st.metric("Tip", f"${tip_amount:.2f}")
                 with col4:
-                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount:.2f}")
+                    st.metric("Discount", f"-${discount_amount_compact:.2f}")
+                with col5:
+                    st.metric("Total Bill", f"${total_bill:.2f}", delta=f"+${tax_amount + tip_amount - discount_amount_compact:.2f}")
                 
                 # Display simple summary first
                 st.subheader("💰 Final Amounts Owed")
@@ -307,15 +340,24 @@ if ui_style == "Classic UI":
                         
                         with col1:
                             st.write("**Items Eaten:**")
-                            for item, cost in details['items_eaten']:
-                                st.write(f"• {item}: ${cost:.2f}")
+                            for item_data in details['items_eaten']:
+                                if len(item_data) == 3:  # New format with num_people_shared
+                                    item, cost, num_people_shared = item_data
+                                    formatted_item = format_item_display(item, cost, num_people_shared)
+                                else:  # Old format for backward compatibility
+                                    item, cost = item_data
+                                    formatted_item = f"{item}: ${cost:.2f}"
+                                st.write(f"• {formatted_item}")
                             st.write(f"**Subtotal:** ${details['subtotal_before_tax_tip']:.2f}")
                         
                         with col2:
-                            st.write("**Breakdown:**")
-                            st.write(f"• Bill %: {details['percentage_of_bill']:.1f}%")
-                            st.write(f"• Tax: ${details['tax_amount']:.2f}")
-                            st.write(f"• Tip: ${details['tip_amount']:.2f}")
+                            st.write("**Cost Breakdown:**")
+                            st.write(f"• Items Subtotal: ${details['subtotal_before_tax_tip']:.2f}")
+                            st.write(f"• Bill Percentage: {details['percentage_of_bill']:.1f}%")
+                            st.write(f"• Tax ({details['percentage_of_bill']:.1f}%): ${details['tax_amount']:.2f}")
+                            st.write(f"• Tip ({details['percentage_of_bill']:.1f}%): ${details['tip_amount']:.2f}")
+                            if details.get('discount_amount', 0) > 0:
+                                st.write(f"• Discount ({details['percentage_of_bill']:.1f}%): -${details['discount_amount']:.2f}")
                             st.write(f"**Final Total:** ${details['final_total']:.2f}")
             else:
                 st.error("Please enter at least one item with valid information.")
@@ -384,6 +426,8 @@ elif ui_style == "Compact UI":
     
     with col2:
         tip_amount_compact = st.number_input("Tip Amount", min_value=0.0, format="%.2f")
+    
+    discount_amount_compact = st.number_input("Discount/Coupon Amount", min_value=0.0, format="%.2f")
     
     # Process file or show manual entry
     if uploaded_file_compact and tax_amount_compact and tip_amount_compact:

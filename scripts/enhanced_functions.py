@@ -20,6 +20,25 @@ def normalize_name(name):
         return ""
     return name.strip().title()
 
+def format_item_display(item_name, cost, num_people_shared):
+    """
+    Format item display to show fractional portions when shared
+    
+    Args:
+        item_name: Name of the item
+        cost: Individual cost for this person
+        num_people_shared: Number of people who shared this item
+    
+    Returns:
+        Formatted string showing the item with fractional portion
+    """
+    if num_people_shared == 1:
+        return f"{item_name}: ${cost:.2f}"
+    else:
+        # Create fraction string
+        fraction_str = f"{1}/{num_people_shared}"
+        return f"{fraction_str} of {item_name}: ${cost:.2f}"
+
 def normalize_names_list(names):
     """
     Normalize a list of names by trimming whitespace and converting to title case
@@ -54,7 +73,7 @@ def normalize_names_list(names):
     
     return normalized
 
-def money_owed_enhanced(items, tax_amount, tip_amount):
+def money_owed_enhanced(items, tax_amount, tip_amount, discount_amount=0.0):
     """
     Enhanced function that returns detailed breakdown for each person
     
@@ -102,8 +121,8 @@ def money_owed_enhanced(items, tax_amount, tip_amount):
 
         for name in normalized_names:
             person_dict[name] += split_cost_of_item
-            # Track what each person ate and their individual costs
-            person_items[name].append((item, split_cost_of_item))
+            # Track what each person ate and their individual costs, including how many people shared the item
+            person_items[name].append((item, split_cost_of_item, len(normalized_names)))
             person_individual_costs[name] += split_cost_of_item
 
     total_tax_tip = tax_amount + tip_amount
@@ -114,8 +133,9 @@ def money_owed_enhanced(items, tax_amount, tip_amount):
     for person in person_dict:
         person_tip_to_pay = person_dict_percent_of_bill[person] * tip_amount
         person_tax_to_pay = person_dict_percent_of_bill[person] * tax_amount
+        person_discount_to_apply = person_dict_percent_of_bill[person] * discount_amount
         person_tax_tip_to_pay = person_tax_to_pay + person_tip_to_pay
-        person_final_total = person_tax_tip_to_pay + person_dict[person]
+        person_final_total = person_tax_tip_to_pay + person_dict[person] - person_discount_to_apply
         person_dict_final[person] = round(person_final_total, 2)
 
     # Return detailed breakdown
@@ -124,6 +144,7 @@ def money_owed_enhanced(items, tax_amount, tip_amount):
         person_percentage = person_dict_percent_of_bill[person]
         person_tax = person_dict_percent_of_bill[person] * tax_amount
         person_tip = person_dict_percent_of_bill[person] * tip_amount
+        person_discount = person_dict_percent_of_bill[person] * discount_amount
         
         detailed_results[person] = {
             'items_eaten': person_items[person],
@@ -131,28 +152,30 @@ def money_owed_enhanced(items, tax_amount, tip_amount):
             'percentage_of_bill': round(person_percentage * 100, 2),
             'tax_amount': round(person_tax, 2),
             'tip_amount': round(person_tip, 2),
+            'discount_amount': round(person_discount, 2),
             'final_total': round(person_dict_final[person], 2)
         }
 
     return detailed_results, person_dict_final, running_total_preTaxTip
 
-def calculate_total_bill(items, tax_amount, tip_amount):
+def calculate_total_bill(items, tax_amount, tip_amount, discount_amount=0.0):
     """
-    Calculate the total bill amount including tax and tip
+    Calculate the total bill amount including tax, tip, and discount
     
     Args:
         items: List of tuples (item_name, cost, [people_who_ate_it])
         tax_amount: Total tax amount
         tip_amount: Total tip amount
+        discount_amount: Total discount amount
     
     Returns:
         tuple: (subtotal, total)
     """
     subtotal = sum(cost for _, cost, _ in items)
-    total = subtotal + tax_amount + tip_amount
+    total = subtotal + tax_amount + tip_amount - discount_amount
     return subtotal, total
 
-def print_detailed_breakdown(items, tax_amount, tip_amount):
+def print_detailed_breakdown(items, tax_amount, tip_amount, discount_amount=0.0):
     """
     Print a detailed breakdown of the bill splitting
     
@@ -161,8 +184,8 @@ def print_detailed_breakdown(items, tax_amount, tip_amount):
         tax_amount: Total tax amount
         tip_amount: Total tip amount
     """
-    detailed_result, simple_result, subtotal = money_owed_enhanced(items, tax_amount, tip_amount)
-    subtotal_bill, total_bill = calculate_total_bill(items, tax_amount, tip_amount)
+    detailed_result, simple_result, subtotal = money_owed_enhanced(items, tax_amount, tip_amount, discount_amount)
+    subtotal_bill, total_bill = calculate_total_bill(items, tax_amount, tip_amount, discount_amount)
     
     print("=== ENHANCED BILL SPLITTING RESULTS ===\n")
     
@@ -170,6 +193,8 @@ def print_detailed_breakdown(items, tax_amount, tip_amount):
     print(f"Subtotal: ${subtotal:.2f}")
     print(f"Tax: ${tax_amount:.2f}")
     print(f"Tip: ${tip_amount:.2f}")
+    if discount_amount > 0:
+        print(f"Discount: -${discount_amount:.2f}")
     print(f"Total Bill: ${total_bill:.2f}")
     print(f"Tax + Tip: ${tax_amount + tip_amount:.2f}")
     print("\n" + "="*50 + "\n")
@@ -178,12 +203,20 @@ def print_detailed_breakdown(items, tax_amount, tip_amount):
     for person, details in detailed_result.items():
         print(f"\n📋 {person} - ${details['final_total']:.2f}")
         print(f"   Items eaten:")
-        for item, cost in details['items_eaten']:
-            print(f"   • {item}: ${cost:.2f}")
-        print(f"   Subtotal: ${details['subtotal_before_tax_tip']:.2f}")
-        print(f"   Bill %: {details['percentage_of_bill']:.1f}%")
-        print(f"   Tax: ${details['tax_amount']:.2f}")
-        print(f"   Tip: ${details['tip_amount']:.2f}")
+        for item_data in details['items_eaten']:
+            if len(item_data) == 3:  # New format with num_people_shared
+                item, cost, num_people_shared = item_data
+                formatted_item = format_item_display(item, cost, num_people_shared)
+            else:  # Old format for backward compatibility
+                item, cost = item_data
+                formatted_item = f"{item}: ${cost:.2f}"
+            print(f"   • {formatted_item}")
+        print(f"   Items Subtotal: ${details['subtotal_before_tax_tip']:.2f}")
+        print(f"   Bill Percentage: {details['percentage_of_bill']:.1f}%")
+        print(f"   Tax ({details['percentage_of_bill']:.1f}%): ${details['tax_amount']:.2f}")
+        print(f"   Tip ({details['percentage_of_bill']:.1f}%): ${details['tip_amount']:.2f}")
+        if details.get('discount_amount', 0) > 0:
+            print(f"   Discount ({details['percentage_of_bill']:.1f}%): -${details['discount_amount']:.2f}")
         print(f"   Final Total: ${details['final_total']:.2f}")
         print("-" * 30)
     
