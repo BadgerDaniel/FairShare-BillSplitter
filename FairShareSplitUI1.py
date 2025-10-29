@@ -546,6 +546,10 @@ if ui_style == "Classic UI":
             st.error("Failed to read the file. Please check the format and try again.")
     
     elif option == "Enter manually":
+        # Initialize per-row ignore tracking
+        if 'classic_ignored_items' not in st.session_state:
+            st.session_state['classic_ignored_items'] = set()
+
         st.write("Enter the items, prices, and the people who ate each item.")
         st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
         st.write("🍽️ **Multiple Servings**: To indicate someone ate multiple servings, repeat their name (e.g., 'Alice, Alice' for 2 servings).")
@@ -605,6 +609,18 @@ if ui_style == "Classic UI":
 
             items.append((item_name, item_price, people))
 
+            # Ignore toggle (strike-through visual cue)
+            ignore_default = (i in st.session_state['classic_ignored_items'])
+            ignore_now = st.checkbox("Ignore this item", value=ignore_default, key=f"classic_ignore_chk_{i}")
+            if ignore_now:
+                st.session_state['classic_ignored_items'].add(i)
+                # Show struck-through preview for clarity
+                display_people = ", ".join([p for p in people if p != "__EVERYONE__"]) or "Everyone"
+                st.markdown(f"~~{item_name or 'Item'} - ${item_price:.2f} - {display_people}~~")
+            else:
+                if i in st.session_state['classic_ignored_items']:
+                    st.session_state['classic_ignored_items'].discard(i)
+
             if i < item_count - 1:
                 st.divider()
 
@@ -641,8 +657,10 @@ if ui_style == "Classic UI":
             discount_amount = st.number_input("Discount/Coupon Amount", min_value=0.0, format="%.2f", key="classic_manual_discount")
         
         if st.button("Calculate"):
-            if items and any(items):  # Check if items list is not empty
-                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount, extra_fees, discount_amount)
+            # Exclude ignored items from calculation
+            active_items = [row for idx, row in enumerate(items) if idx not in st.session_state.get('classic_ignored_items', set())]
+            if active_items and any(active_items):  # Check if items list is not empty
+                detailed_result, simple_result, subtotal = money_owed(active_items, tax_amount, tip_amount, extra_fees, discount_amount)
                 
                 # Display total bill information
                 total_bill = subtotal + tax_amount + tip_amount + extra_fees - discount_amount
@@ -657,14 +675,14 @@ if ui_style == "Classic UI":
                 
                 # Display item summary
                 with st.expander("📝 View Item Summary", expanded=False):
-                    for idx, (item_name, cost, people) in enumerate(items):
+                    for idx, (item_name, cost, people) in enumerate(active_items):
                         st.write(f"**{item_name}** - ${cost:.2f}")
                         for person in people:
                             if person == "__EVERYONE__":
                                 st.write(f"  • Everyone")
                             else:
                                 st.write(f"  • {person}")
-                        if idx < len(items) - 1:
+                        if idx < len(active_items) - 1:
                             st.divider()
                 
                 # Display simple summary first
