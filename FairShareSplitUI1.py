@@ -551,6 +551,35 @@ if ui_style == "Classic UI":
         st.write("🍽️ **Multiple Servings**: To indicate someone ate multiple servings, repeat their name (e.g., 'Alice, Alice' for 2 servings).")
         st.info("👥 **Tip**: Leave the 'People' field blank to assign the item to everyone! The item will be shared equally among all people on the bill.")
 
+        # Import partially completed session (JSON)
+        with st.expander("📤 Import Partially Completed Session", expanded=False):
+            uploaded_session = st.file_uploader("Choose a session JSON file", type=["json"], key="classic_import_partial")
+            if uploaded_session is not None:
+                try:
+                    import json
+                    session_payload = json.load(uploaded_session)
+                    imported_count = int(session_payload.get('item_count', len(session_payload.get('items', []))))
+                    imported_items = session_payload.get('items', [])
+                    # Set item count first, then populate fields
+                    st.session_state['classic_manual_item_count'] = imported_count
+                    for i, item in enumerate(imported_items[:imported_count]):
+                        try:
+                            name_i, price_i, people_i = item
+                        except Exception:
+                            # fallback if structure unexpected
+                            continue
+                        st.session_state[f'classic_manual_item_name_{i}'] = name_i
+                        st.session_state[f'classic_manual_item_price_{i}'] = float(price_i) if isinstance(price_i, (int, float, str)) and str(price_i) != '' else 0.0
+                        # If people is ["__EVERYONE__"] keep blank to indicate everyone
+                        if isinstance(people_i, list) and len(people_i) == 1 and people_i[0] == "__EVERYONE__":
+                            st.session_state[f'classic_manual_item_people_{i}'] = ""
+                        else:
+                            st.session_state[f'classic_manual_item_people_{i}'] = ", ".join(people_i) if isinstance(people_i, list) else str(people_i)
+                    st.success(f"Loaded session with {imported_count} items.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to import session: {e}")
+
         # Choose number of items; shows that many editable rows at once
         item_count = st.number_input("How many different items?", min_value=1, step=1, key="classic_manual_item_count")
 
@@ -579,7 +608,26 @@ if ui_style == "Classic UI":
             if i < item_count - 1:
                 st.divider()
 
+        # Export partially completed session (JSON)
         st.divider()
+        with st.expander("💾 Export Partially Completed Session", expanded=False):
+            try:
+                session_export = {
+                    'item_count': int(item_count),
+                    'items': items,
+                }
+                import json
+                json_blob = json.dumps(session_export, indent=2)
+                st.download_button(
+                    label="Download Session JSON",
+                    data=json_blob,
+                    file_name="bill_splitter_session.json",
+                    mime="application/json",
+                    key="classic_export_partial_download"
+                )
+            except Exception as e:
+                st.error(f"Could not prepare session export: {e}")
+
         st.subheader("💰 Additional Charges")
         
         col1, col2, col3, col4 = st.columns(4)
