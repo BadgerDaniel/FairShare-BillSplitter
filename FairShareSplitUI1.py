@@ -546,115 +546,39 @@ if ui_style == "Classic UI":
             st.error("Failed to read the file. Please check the format and try again.")
     
     elif option == "Enter manually":
-        # Initialize classic items session state
-        if 'classic_items' not in st.session_state:
-            st.session_state['classic_items'] = []
-        if 'classic_ignored_items' not in st.session_state:
-            st.session_state['classic_ignored_items'] = set()
-        
         st.write("Enter the items, prices, and the people who ate each item.")
         st.write("💡 **Note**: Names will be automatically normalized (trimmed and title-cased).")
         st.write("🍽️ **Multiple Servings**: To indicate someone ate multiple servings, repeat their name (e.g., 'Alice, Alice' for 2 servings).")
         st.info("👥 **Tip**: Leave the 'People' field blank to assign the item to everyone! The item will be shared equally among all people on the bill.")
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            item_name_classic = st.text_input("Add Item Name", key="classic_new_item_name", placeholder="e.g., Pizza")
-            item_price_classic = st.number_input("Price", min_value=0.0, format="%.2f", key="classic_new_item_price")
-            item_people_input_classic = st.text_input("People (comma-separated)", key="classic_new_item_people", placeholder="e.g., Alice, Bob or leave blank for everyone")
-        
-        with col2:
-            st.write("")  # Spacing
-            if st.button("➕ Add Item", type="primary"):
-                if item_name_classic and item_price_classic:
-                    # Process the comma-separated names
-                    if item_people_input_classic:
-                        item_people = [name.strip() for name in item_people_input_classic.split(",") if name.strip()]
-                    else:
-                        # If blank, set to "everyone" placeholder to be resolved later
-                        item_people = ["__EVERYONE__"]
-                    
-                    st.session_state['classic_items'].append((item_name_classic, item_price_classic, item_people))
-                    st.success(f"Added: {item_name_classic} - ${item_price_classic:.2f}")
-                    st.rerun()
-                else:
-                    st.error("Please enter item name and price")
-        
-        st.divider()
-        
-        # Display entered items with delete/ignore buttons
-        if 'classic_items' in st.session_state and st.session_state['classic_items']:
-            st.subheader("📋 Items Entered")
-            for idx, (name, price, people) in enumerate(st.session_state['classic_items']):
-                is_ignored = idx in st.session_state['classic_ignored_items']
-                
-                col1, col2, col3 = st.columns([3, 1, 0.5])
-                
-                with col1:
-                    if is_ignored:
-                        st.markdown(f"~~**{name}** - ${price:.2f} for {', '.join(people)}~~")
-                    else:
-                        st.write(f"**{name}** - ${price:.2f} for {', '.join(people)}")
-                
-                with col2:
-                    if st.button("❌ Delete", key=f"classic_delete_{idx}", type="secondary"):
-                        st.session_state['classic_items'].pop(idx)
-                        st.session_state['classic_ignored_items'].discard(idx)
-                        st.rerun()
-                
-                with col3:
-                    if is_ignored:
-                        if st.button("✅ Restore", key=f"classic_restore_{idx}"):
-                            st.session_state['classic_ignored_items'].discard(idx)
-                            st.rerun()
-                    else:
-                        if st.button("⚪ Ignore", key=f"classic_ignore_{idx}"):
-                            st.session_state['classic_ignored_items'].add(idx)
-                            st.rerun()
-                
-                if idx < len(st.session_state['classic_items']) - 1:
-                    st.divider()
-            
-            # Export/Import buttons
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                if st.button("💾 Export Session", key="classic_export"):
-                    session_data = {
-                        'items': st.session_state['classic_items'],
-                        'tax': tax_amount if 'tax_amount' in locals() else 0,
-                        'tip': tip_amount if 'tip_amount' in locals() else 0,
-                        'extra_fees': extra_fees if 'extra_fees' in locals() else 0,
-                        'discount': discount_amount if 'discount_amount' in locals() else 0
-                    }
-                    import json
-                    json_str = json.dumps(session_data, indent=2)
-                    st.download_button(
-                        label="📥 Download Session",
-                        data=json_str,
-                        file_name="bill_splitter_session.json",
-                        mime="application/json",
-                        key="classic_download_session"
-                    )
-            
-            with col2:
-                uploaded_session = st.file_uploader("📤 Import Session", type=['json'], key="classic_import_session", help="Upload a previously saved session file")
-                if uploaded_session is not None:
-                    try:
-                        import json
-                        session_data = json.load(uploaded_session)
-                        st.session_state['classic_items'] = session_data.get('items', [])
-                        st.success(f"✅ Session loaded! {len(session_data.get('items', []))} items imported.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error loading session: {str(e)}")
-        
-        st.divider()
-        
-        # Use items from session state
+
+        # Choose number of items; shows that many editable rows at once
+        item_count = st.number_input("How many different items?", min_value=1, step=1, key="classic_manual_item_count")
+
         items = []
-        if 'classic_items' in st.session_state:
-            items = st.session_state['classic_items']
-        
+        for i in range(item_count):
+            st.subheader(f"Item {i+1}")
+            col1, col2, col3 = st.columns([2, 1, 2])
+
+            with col1:
+                item_name = st.text_input("Item name", key=f"classic_manual_item_name_{i}", placeholder="e.g., Pizza")
+
+            with col2:
+                item_price = st.number_input("Price", min_value=0.0, format="%.2f", key=f"classic_manual_item_price_{i}")
+
+            with col3:
+                item_people_input = st.text_input("People who ate this item (comma-separated)", key=f"classic_manual_item_people_{i}", placeholder="e.g., Alice, Bob or leave blank for everyone")
+
+            # Process names per row
+            if item_people_input:
+                people = [name.strip() for name in item_people_input.split(",") if name.strip()]
+            else:
+                people = ["__EVERYONE__"]
+
+            items.append((item_name, item_price, people))
+
+            if i < item_count - 1:
+                st.divider()
+
         st.divider()
         st.subheader("💰 Additional Charges")
         
@@ -669,12 +593,8 @@ if ui_style == "Classic UI":
             discount_amount = st.number_input("Discount/Coupon Amount", min_value=0.0, format="%.2f", key="classic_manual_discount")
         
         if st.button("Calculate"):
-            # Filter out ignored items
-            active_items = [item for idx, item in enumerate(items) 
-                           if idx not in st.session_state.get('classic_ignored_items', set())]
-            
-            if active_items and any(active_items):  # Check if items list is not empty
-                detailed_result, simple_result, subtotal = money_owed(active_items, tax_amount, tip_amount, extra_fees, discount_amount)
+            if items and any(items):  # Check if items list is not empty
+                detailed_result, simple_result, subtotal = money_owed(items, tax_amount, tip_amount, extra_fees, discount_amount)
                 
                 # Display total bill information
                 total_bill = subtotal + tax_amount + tip_amount + extra_fees - discount_amount
@@ -689,7 +609,7 @@ if ui_style == "Classic UI":
                 
                 # Display item summary
                 with st.expander("📝 View Item Summary", expanded=False):
-                    for idx, (item_name, cost, people) in enumerate(active_items):
+                    for idx, (item_name, cost, people) in enumerate(items):
                         st.write(f"**{item_name}** - ${cost:.2f}")
                         for person in people:
                             if person == "__EVERYONE__":
