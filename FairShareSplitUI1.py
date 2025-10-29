@@ -616,7 +616,7 @@ if ui_style == "Classic UI":
                                 st.write(f"  • Everyone")
                             else:
                                 st.write(f"  • {person}")
-                        if idx < len(active_items) - 1:
+                        if idx < len(items) - 1:
                             st.divider()
                 
                 # Display simple summary first
